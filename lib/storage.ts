@@ -1,4 +1,4 @@
-import type { DataSourceConfig, ExtensionConfig, PublicConfig } from './types';
+import type { DataSourceConfig, ExtensionConfig, NotionDatabaseConfig, PublicConfig } from './types';
 
 const STORAGE_KEY = 'notion-lite-clipper-config';
 
@@ -6,20 +6,52 @@ function normalizeDataSource(input: Partial<DataSourceConfig> | null | undefined
   const name = input?.name?.trim() ?? '';
   const id = input?.id?.trim() ?? '';
 
-  if (!name && !id) {
+  if (!name || !id) {
     return null;
   }
 
   return { name, id };
 }
 
-export function sanitizeConfig(input: Partial<ExtensionConfig> | null | undefined): ExtensionConfig {
-  const notionToken = input?.notionToken?.trim() ?? '';
+function normalizeDatabase(input: Partial<NotionDatabaseConfig> | null | undefined): NotionDatabaseConfig | null {
+  const id = input?.id?.trim() ?? '';
+  const name = input?.name?.trim() ?? '';
   const dataSources = (input?.dataSources ?? [])
     .map((entry) => normalizeDataSource(entry))
     .filter((entry): entry is DataSourceConfig => Boolean(entry));
 
-  return { notionToken, dataSources };
+  if (!id || dataSources.length === 0) {
+    return null;
+  }
+
+  return {
+    id,
+    name: name || id,
+    dataSources,
+  };
+}
+
+export function flattenDataSources(databases: NotionDatabaseConfig[]): DataSourceConfig[] {
+  const uniqueById = new Map<string, DataSourceConfig>();
+
+  for (const database of databases) {
+    for (const dataSource of database.dataSources) {
+      if (!uniqueById.has(dataSource.id)) {
+        uniqueById.set(dataSource.id, dataSource);
+      }
+    }
+  }
+
+  return [...uniqueById.values()];
+}
+
+export function sanitizeConfig(input: Partial<ExtensionConfig> | null | undefined): ExtensionConfig {
+  const notionToken = input?.notionToken?.trim() ?? '';
+  const databases = (input?.databases ?? [])
+    .map((entry) => normalizeDatabase(entry))
+    .filter((entry): entry is NotionDatabaseConfig => Boolean(entry));
+
+  return { notionToken, databases };
 }
 
 export async function getStoredConfig(): Promise<ExtensionConfig> {
@@ -37,6 +69,7 @@ export async function getPublicConfig(): Promise<PublicConfig> {
   const config = await getStoredConfig();
   return {
     hasToken: Boolean(config.notionToken),
-    dataSources: config.dataSources,
+    dataSources: flattenDataSources(config.databases),
+    databaseCount: config.databases.length,
   };
 }

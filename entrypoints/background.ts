@@ -1,5 +1,5 @@
-import { createPageInNotion, normalizeNotionId, resolveTargetDataSource } from '../lib/notion';
-import { getPublicConfig, getStoredConfig } from '../lib/storage';
+import { createPageInNotion, normalizeNotionId, resolveDatabaseDataSources } from '../lib/notion';
+import { flattenDataSources, getPublicConfig, getStoredConfig } from '../lib/storage';
 import type { ExtensionConfig, SelectionSaveResult, ValidationResult } from '../lib/types';
 
 export const ROOT_MENU_ID = 'save-to-notion';
@@ -34,14 +34,16 @@ function getDataSourceIdFromMenuItemId(menuItemId: string): string {
 }
 
 export function buildMenuItems(config: ExtensionConfig): MenuItemDefinition[] {
-  if (config.notionToken && config.dataSources.length > 0) {
+  const dataSources = flattenDataSources(config.databases);
+
+  if (config.notionToken && dataSources.length > 0) {
     return [
       {
         id: ROOT_MENU_ID,
         title: 'Save to Notion',
         contexts: ['selection'],
       },
-      ...config.dataSources.map(
+      ...dataSources.map(
         (dataSource): MenuItemDefinition => ({
           id: getDataSourceMenuItemId(dataSource.id),
           parentId: ROOT_MENU_ID,
@@ -86,12 +88,13 @@ async function refreshContextMenus(): Promise<void> {
 
 async function handleSaveSelection(message: { sourceId?: string; selectionText?: string }): Promise<SelectionSaveResult> {
   const config = await getStoredConfig();
+  const dataSources = flattenDataSources(config.databases);
 
-  if (!config.notionToken || config.dataSources.length === 0) {
+  if (!config.notionToken || dataSources.length === 0) {
     return {
       ok: false,
       needsSetup: true,
-      message: 'Open extension options and add a Notion token plus at least one database.',
+      message: 'Open extension options, add a Notion token, then import at least one database.',
     };
   }
 
@@ -105,7 +108,7 @@ async function handleSaveSelection(message: { sourceId?: string; selectionText?:
     };
   }
 
-  const configuredSource = config.dataSources.find((entry) => entry.id === sourceId);
+  const configuredSource = dataSources.find((entry) => entry.id === sourceId);
   if (!configuredSource) {
     return {
       ok: false,
@@ -144,18 +147,18 @@ export async function handleContextMenuAction(
   });
 }
 
-async function handleValidateDataSource(message: { sourceId?: string; token?: string }): Promise<ValidationResult> {
-  const sourceId = message.sourceId?.trim() ?? '';
+async function handleValidateDatabase(message: { databaseId?: string; token?: string }): Promise<ValidationResult> {
+  const databaseId = message.databaseId?.trim() ?? '';
   const token = message.token?.trim() || (await getStoredConfig()).notionToken;
 
   if (!token) {
     return {
       ok: false,
-      message: 'Enter a Notion token first to verify this ID.',
+      message: 'Enter a Notion token first to verify this database.',
     };
   }
 
-  if (!normalizeNotionId(sourceId)) {
+  if (!normalizeNotionId(databaseId)) {
     return {
       ok: false,
       message: 'Database ID must be a valid 32-character Notion ID.',
@@ -163,22 +166,25 @@ async function handleValidateDataSource(message: { sourceId?: string; token?: st
   }
 
   try {
-    const result = await resolveTargetDataSource({
+    const result = await resolveDatabaseDataSources({
       token,
-      sourceId,
+      databaseId,
     });
+    const names = result.dataSources.map((entry) => entry.name).join(', ');
 
     return {
       ok: true,
       resolvedName: result.resolvedName,
+      resolvedDatabaseId: result.databaseId,
+      resolvedDataSources: result.dataSources,
       message: result.resolvedName
-        ? `Verified access to ${result.resolvedName}.`
-        : 'Verified access to this Notion destination.',
+        ? `Found ${result.dataSources.length} data source${result.dataSources.length === 1 ? '' : 's'} in ${result.resolvedName}: ${names}.`
+        : `Found ${result.dataSources.length} data source${result.dataSources.length === 1 ? '' : 's'}: ${names}.`,
     };
   } catch (error) {
     return {
       ok: false,
-      message: error instanceof Error ? error.message : 'Unable to verify this Notion destination.',
+      message: error instanceof Error ? error.message : 'Unable to verify this Notion database.',
     };
   }
 }
@@ -212,15 +218,15 @@ export default defineBackground(() => {
       return undefined;
     }
 
-    const typedMessage = message as { type: string; sourceId?: string; selectionText?: string; token?: string };
+    const typedMessage = message as { type: string; sourceId?: string; selectionText?: string; token?: string; databaseId?: string };
 
     switch (typedMessage.type) {
       case 'get-public-config':
         return getPublicConfig();
       case 'save-selection':
         return handleSaveSelection(typedMessage);
-      case 'validate-datasource':
-        return handleValidateDataSource(typedMessage);
+      case 'validate-database':
+        return handleValidateDatabase(typedMessage);
       default:
         return undefined;
     }

@@ -24,6 +24,10 @@ function render(app: HTMLDivElement, config: PublicConfig): void {
           </div>
           <div>
             <dt>Databases</dt>
+            <dd>${config.databaseCount}</dd>
+          </div>
+          <div>
+            <dt>Data sources</dt>
             <dd>${config.dataSources.length}</dd>
           </div>
         </dl>

@@ -3,14 +3,21 @@ export interface DataSourceConfig {
   name: string;
 }
 
+export interface NotionDatabaseConfig {
+  id: string;
+  name: string;
+  dataSources: DataSourceConfig[];
+}
+
 export interface ExtensionConfig {
   notionToken: string;
-  dataSources: DataSourceConfig[];
+  databases: NotionDatabaseConfig[];
 }
 
 export interface PublicConfig {
   hasToken: boolean;
   dataSources: DataSourceConfig[];
+  databaseCount: number;
 }
 
 export interface SelectionRect {
@@ -31,4 +38,6 @@ export interface ValidationResult {
   ok: boolean;
   message: string;
   resolvedName?: string;
+  resolvedDatabaseId?: string;
+  resolvedDataSources?: DataSourceConfig[];
 }

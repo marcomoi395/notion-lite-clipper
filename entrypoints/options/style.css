@@ -133,7 +133,7 @@ h2 {
   gap: 0.875rem;
 }
 
-.data-source-row {
+.database-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) auto;
   gap: 0.875rem;
@@ -181,7 +181,7 @@ h2 {
 
   .section-heading,
   .actions,
-  .data-source-row {
+  .database-row {
     grid-template-columns: 1fr;
     display: grid;
   }

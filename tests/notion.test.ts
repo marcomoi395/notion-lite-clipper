@@ -5,6 +5,7 @@ import {
   extractNotionError,
   findTitlePropertyName,
   normalizeNotionId,
+  resolveDatabaseDataSources,
   resolveTargetDataSource,
 } from '../lib/notion';
 
@@ -59,6 +60,43 @@ describe('extractNotionError', () => {
 
   it('falls back to a status-specific message', () => {
     expect(extractNotionError(401, null)).toMatch(/token/i);
+  });
+});
+
+describe('resolveDatabaseDataSources', () => {
+  it('retrieves every data source listed under a database id', async () => {
+    const fetcher = vi.fn(async (input: string) => {
+      if (input.endsWith('/v1/databases/d9824bdc-8445-4327-be8b-5b47500af6ce')) {
+        return new Response(
+          JSON.stringify({
+            id: 'd9824bdc-8445-4327-be8b-5b47500af6ce',
+            title: [{ plain_text: 'Inbox DB' }],
+            data_sources: [
+              { id: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', name: 'Inbox' },
+              { id: 'ffffffff-1111-2222-3333-444444444444', name: 'Quotes' },
+            ],
+          }),
+          { status: 200 },
+        );
+      }
+
+      return new Response(JSON.stringify({ message: 'missing' }), { status: 404 });
+    });
+
+    await expect(
+      resolveDatabaseDataSources({
+        fetcher,
+        token: 'secret',
+        databaseId: 'd9824bdc84454327be8b5b47500af6ce',
+      }),
+    ).resolves.toEqual({
+      databaseId: 'd9824bdc-8445-4327-be8b-5b47500af6ce',
+      resolvedName: 'Inbox DB',
+      dataSources: [
+        { id: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', name: 'Inbox' },
+        { id: 'ffffffff-1111-2222-3333-444444444444', name: 'Quotes' },
+      ],
+    });
   });
 });
 

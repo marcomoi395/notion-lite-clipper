@@ -20,14 +20,21 @@ beforeEach(async () => {
   ROOT_MENU_ID = background.ROOT_MENU_ID;
   SETTINGS_MENU_ID = background.SETTINGS_MENU_ID;
 });
+
 describe('buildMenuItems', () => {
   it('creates a selection submenu with one child per datasource', () => {
     expect(
       buildMenuItems({
         notionToken: 'secret',
-        dataSources: [
-          { id: 'db-1', name: 'Inbox' },
-          { id: 'db-2', name: 'Quotes' },
+        databases: [
+          {
+            id: 'database-1',
+            name: 'Inbox DB',
+            dataSources: [
+              { id: 'db-1', name: 'Inbox' },
+              { id: 'db-2', name: 'Quotes' },
+            ],
+          },
         ],
       }),
     ).toEqual([
@@ -55,7 +62,7 @@ describe('buildMenuItems', () => {
     expect(
       buildMenuItems({
         notionToken: '',
-        dataSources: [],
+        databases: [],
       }),
     ).toEqual([
       {

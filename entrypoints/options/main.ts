@@ -1,20 +1,21 @@
 import './style.css';
 
 import { normalizeNotionId } from '../../lib/notion';
-import { sanitizeConfig, saveStoredConfig } from '../../lib/storage';
-import type { ValidationResult } from '../../lib/types';
+import { getStoredConfig, sanitizeConfig, saveStoredConfig } from '../../lib/storage';
+import type { DataSourceConfig, ValidationResult } from '../../lib/types';
 
-interface DataSourceRow {
+interface DatabaseRow {
   key: number;
-  name: string;
   id: string;
+  resolvedName: string;
+  resolvedDataSources: DataSourceConfig[];
   validationState: 'idle' | 'checking' | 'valid' | 'invalid';
   validationMessage: string;
 }
 
 interface OptionsState {
   notionToken: string;
-  dataSources: DataSourceRow[];
+  databases: DatabaseRow[];
   saveMessage: string;
   saveState: 'idle' | 'success' | 'error';
 }
@@ -24,35 +25,27 @@ const validationTimers = new Map<number, number>();
 
 const state: OptionsState = {
   notionToken: '',
-  dataSources: [createEmptyRow()],
+  databases: [createEmptyRow()],
   saveMessage: '',
   saveState: 'idle',
 };
 
-function createEmptyRow(): DataSourceRow {
+function createEmptyRow(): DatabaseRow {
   return {
     key: nextRowKey++,
-    name: '',
     id: '',
+    resolvedName: '',
+    resolvedDataSources: [],
     validationState: 'idle',
     validationMessage: '',
   };
 }
 
-function getRowError(row: DataSourceRow): string {
-  const name = row.name.trim();
+function getRowError(row: DatabaseRow): string {
   const id = row.id.trim();
 
-  if (!name && !id) {
-    return '';
-  }
-
-  if (!name) {
-    return 'Enter a display name.';
-  }
-
   if (!id) {
-    return 'Enter a Database ID.';
+    return '';
   }
 
   if (!normalizeNotionId(id)) {
@@ -75,14 +68,14 @@ function setSaveStatus(message: string, saveState: OptionsState['saveState']): v
   state.saveState = saveState;
 }
 
-function setRowValidation(row: DataSourceRow, stateValue: DataSourceRow['validationState'], message: string): void {
+function setRowValidation(row: DatabaseRow, stateValue: DatabaseRow['validationState'], message: string): void {
   row.validationState = stateValue;
   row.validationMessage = message;
 }
 
 function updateRowMessageInDom(rowKey: number): void {
-  const row = state.dataSources.find((entry) => entry.key === rowKey);
-  const messageElement = document.querySelector<HTMLParagraphElement>(`.data-source-row[data-key="${rowKey}"] .validation`);
+  const row = state.databases.find((entry) => entry.key === rowKey);
+  const messageElement = document.querySelector<HTMLParagraphElement>(`.database-row[data-key="${rowKey}"] .validation`);
   if (!row || !messageElement) {
     return;
   }
@@ -104,43 +97,58 @@ function updateSaveStatusInDom(): void {
   element.classList.toggle('is-invalid', state.saveState === 'error');
 }
 
-async function validateRowRemotely(rowKey: number): Promise<void> {
-  const row = state.dataSources.find((entry) => entry.key === rowKey);
+async function validateRowRemotely(rowKey: number): Promise<boolean> {
+  const row = state.databases.find((entry) => entry.key === rowKey);
   if (!row) {
-    return;
+    return false;
   }
 
   const localError = getRowError(row);
   if (localError) {
+    row.resolvedName = '';
+    row.resolvedDataSources = [];
     setRowValidation(row, 'invalid', localError);
     updateRowMessageInDom(rowKey);
-    return;
+    return false;
+  }
+
+  if (!row.id.trim()) {
+    row.resolvedName = '';
+    row.resolvedDataSources = [];
+    setRowValidation(row, 'idle', '');
+    updateRowMessageInDom(rowKey);
+    return false;
   }
 
   if (!state.notionToken.trim()) {
-    setRowValidation(row, 'idle', 'Format looks valid. Add a token to verify access.');
+    row.resolvedName = '';
+    row.resolvedDataSources = [];
+    setRowValidation(row, 'invalid', 'Add a token to import data sources from this database.');
     updateRowMessageInDom(rowKey);
-    return;
+    return false;
   }
 
   const currentId = row.id.trim();
   const currentToken = state.notionToken.trim();
-  setRowValidation(row, 'checking', 'Checking access…');
+  setRowValidation(row, 'checking', 'Retrieving data sources…');
   updateRowMessageInDom(rowKey);
 
   const response = (await browser.runtime.sendMessage({
-    type: 'validate-datasource',
-    sourceId: currentId,
+    type: 'validate-database',
+    databaseId: currentId,
     token: currentToken,
   })) as ValidationResult;
 
-  const latestRow = state.dataSources.find((entry) => entry.key === rowKey);
+  const latestRow = state.databases.find((entry) => entry.key === rowKey);
   if (!latestRow || latestRow.id.trim() !== currentId) {
-    return;
+    return false;
   }
 
+  latestRow.resolvedName = response.resolvedName ?? '';
+  latestRow.resolvedDataSources = response.resolvedDataSources ?? [];
   setRowValidation(latestRow, response.ok ? 'valid' : 'invalid', response.message);
   updateRowMessageInDom(rowKey);
+  return response.ok;
 }
 
 function scheduleRowValidation(rowKey: number): void {
@@ -157,20 +165,16 @@ function scheduleRowValidation(rowKey: number): void {
 }
 
 function buildRowsMarkup(): string {
-  return state.dataSources
+  return state.databases
     .map((row) => {
       const message = row.validationMessage || getRowError(row);
       const validationClass = row.validationState === 'valid' ? 'is-valid' : row.validationState === 'invalid' ? 'is-invalid' : '';
 
       return `
-        <div class="data-source-row" data-key="${row.key}">
-          <div class="field-group">
-            <label for="name-${row.key}">Display name</label>
-            <input id="name-${row.key}" data-field="name" data-key="${row.key}" type="text" value="${escapeHtml(row.name)}" placeholder="Inbox" />
-          </div>
+        <div class="database-row" data-key="${row.key}">
           <div class="field-group">
             <label for="id-${row.key}">Database ID</label>
-            <input id="id-${row.key}" data-field="id" data-key="${row.key}" type="text" value="${escapeHtml(row.id)}" placeholder="32-character Notion ID" />
+            <input id="id-${row.key}" data-field="id" data-key="${row.key}" type="text" value="${escapeHtml(row.id)}" placeholder="32-character Notion database ID" />
           </div>
           <button class="remove-button" data-action="remove" data-key="${row.key}" type="button">Remove</button>
           <p class="validation ${validationClass}">${escapeHtml(message)}</p>
@@ -187,7 +191,7 @@ function attachEventHandlers(app: HTMLDivElement): void {
     setSaveStatus('', 'idle');
     updateSaveStatusInDom();
 
-    for (const row of state.dataSources) {
+    for (const row of state.databases) {
       if (row.id.trim()) {
         scheduleRowValidation(row.key);
       }
@@ -195,7 +199,7 @@ function attachEventHandlers(app: HTMLDivElement): void {
   });
 
   app.querySelector<HTMLButtonElement>('#add-row')?.addEventListener('click', () => {
-    state.dataSources.push(createEmptyRow());
+    state.databases.push(createEmptyRow());
     render();
   });
 
@@ -207,13 +211,14 @@ function attachEventHandlers(app: HTMLDivElement): void {
     input.addEventListener('input', (event) => {
       const target = event.currentTarget as HTMLInputElement;
       const rowKey = Number(target.dataset.key);
-      const field = target.dataset.field as 'name' | 'id';
-      const row = state.dataSources.find((entry) => entry.key === rowKey);
+      const row = state.databases.find((entry) => entry.key === rowKey);
       if (!row) {
         return;
       }
 
-      row[field] = target.value;
+      row.id = target.value;
+      row.resolvedName = '';
+      row.resolvedDataSources = [];
       setRowValidation(row, 'idle', '');
       setSaveStatus('', 'idle');
       updateSaveStatusInDom();
@@ -225,9 +230,9 @@ function attachEventHandlers(app: HTMLDivElement): void {
   for (const button of app.querySelectorAll<HTMLButtonElement>('button[data-action="remove"]')) {
     button.addEventListener('click', () => {
       const rowKey = Number(button.dataset.key);
-      state.dataSources = state.dataSources.filter((entry) => entry.key !== rowKey);
-      if (state.dataSources.length === 0) {
-        state.dataSources.push(createEmptyRow());
+      state.databases = state.databases.filter((entry) => entry.key !== rowKey);
+      if (state.databases.length === 0) {
+        state.databases.push(createEmptyRow());
       }
       render();
     });
@@ -247,7 +252,7 @@ function render(): void {
           <p class="eyebrow">Notion Lite Clipper</p>
           <h1>Configure Notion capture</h1>
           <p class="description">
-            Save highlighted snippets of up to 10 words into your chosen Notion databases.
+            Paste each Notion database ID once. The extension will retrieve every data source under that database automatically.
           </p>
         </div>
       </section>
@@ -268,8 +273,8 @@ function render(): void {
       <section class="card">
         <div class="section-heading">
           <div>
-            <h2>Data sources</h2>
-            <p>Each row needs a display name and the target Database ID from Notion.</p>
+            <h2>Databases</h2>
+            <p>Each database ID is resolved through Notion&apos;s retrieve database API, then its data sources are imported for the context menu.</p>
           </div>
           <button id="add-row" type="button">Add database</button>
         </div>
@@ -289,9 +294,16 @@ function render(): void {
 }
 
 async function saveSettings(): Promise<void> {
-  const rowErrors = state.dataSources
+  const filledRows = state.databases.filter((row) => row.id.trim());
+  const rowErrors = filledRows
     .map((row) => ({ row, error: getRowError(row) }))
     .filter((entry) => Boolean(entry.error));
+
+  if (!state.notionToken.trim()) {
+    setSaveStatus('Enter a Notion token before saving.', 'error');
+    render();
+    return;
+  }
 
   if (rowErrors.length > 0) {
     for (const entry of rowErrors) {
@@ -303,43 +315,62 @@ async function saveSettings(): Promise<void> {
     return;
   }
 
+  let hasValidationFailure = false;
+  for (const row of filledRows) {
+    const isValid = await validateRowRemotely(row.key);
+    if (!isValid) {
+      hasValidationFailure = true;
+    }
+  }
+
+  if (hasValidationFailure) {
+    setSaveStatus('Fix database validation errors before saving.', 'error');
+    render();
+    return;
+  }
+
   const config = sanitizeConfig({
     notionToken: state.notionToken,
-    dataSources: state.dataSources.map((row) => ({
-      name: row.name,
+    databases: filledRows.map((row) => ({
       id: normalizeNotionId(row.id) ?? row.id.trim(),
+      name: row.resolvedName || row.id.trim(),
+      dataSources: row.resolvedDataSources,
     })),
   });
 
   await saveStoredConfig(config);
+
   state.notionToken = config.notionToken;
-  state.dataSources =
-    config.dataSources.length > 0
-      ? config.dataSources.map((row) => ({
+  state.databases =
+    config.databases.length > 0
+      ? config.databases.map((row) => ({
           key: nextRowKey++,
-          name: row.name,
           id: row.id,
-          validationState: 'idle',
-          validationMessage: '',
+          resolvedName: row.name,
+          resolvedDataSources: row.dataSources,
+          validationState: 'valid',
+          validationMessage: `Imported ${row.dataSources.length} data source${row.dataSources.length === 1 ? '' : 's'} from ${row.name}.`,
         }))
       : [createEmptyRow()];
-  setSaveStatus('Settings saved.', 'success');
+
+  const importedCount = config.databases.reduce((total, row) => total + row.dataSources.length, 0);
+  setSaveStatus(`Settings saved. Imported ${importedCount} data source${importedCount === 1 ? '' : 's'} from ${config.databases.length} database${config.databases.length === 1 ? '' : 's'}.`, 'success');
   render();
 }
 
 async function loadInitialState(): Promise<void> {
-  const config = await browser.storage.sync.get('notion-lite-clipper-config');
-  const sanitized = sanitizeConfig(config['notion-lite-clipper-config'] as Parameters<typeof sanitizeConfig>[0]);
+  const config = await getStoredConfig();
 
-  state.notionToken = sanitized.notionToken;
-  state.dataSources =
-    sanitized.dataSources.length > 0
-      ? sanitized.dataSources.map((row) => ({
+  state.notionToken = config.notionToken;
+  state.databases =
+    config.databases.length > 0
+      ? config.databases.map((row) => ({
           key: nextRowKey++,
-          name: row.name,
           id: row.id,
-          validationState: 'idle',
-          validationMessage: '',
+          resolvedName: row.name,
+          resolvedDataSources: row.dataSources,
+          validationState: 'valid',
+          validationMessage: `Imported ${row.dataSources.length} data source${row.dataSources.length === 1 ? '' : 's'} from ${row.name}.`,
         }))
       : [createEmptyRow()];
 

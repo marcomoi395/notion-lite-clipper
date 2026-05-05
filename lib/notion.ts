@@ -1,4 +1,4 @@
-import type { SelectionSaveResult } from './types';
+import type { DataSourceConfig, SelectionSaveResult } from './types';
 
 const NOTION_API_BASE_URL = 'https://api.notion.com/v1';
 export const NOTION_VERSION = '2025-09-03';
@@ -8,6 +8,10 @@ type NotionFetcher = (input: string, init?: RequestInit) => Promise<Response>;
 interface FetchOptions {
   fetcher?: NotionFetcher;
   token: string;
+}
+
+interface ResolveDatabaseDataSourcesOptions extends FetchOptions {
+  databaseId: string;
 }
 
 interface ResolveTargetDataSourceOptions extends FetchOptions {
@@ -26,6 +30,8 @@ interface NotionDataSourceResponse {
 }
 
 interface NotionDatabaseResponse {
+  id?: string;
+  title?: Array<{ plain_text?: string }>;
   data_sources?: Array<{ id?: string; name?: string }>;
 }
 
@@ -98,6 +104,25 @@ export function extractNotionError(status: number, payload: unknown): string {
   }
 }
 
+function getDatabaseTitle(title: NotionDatabaseResponse['title']): string | undefined {
+  const plainText = (title ?? []).map((entry) => entry.plain_text?.trim() ?? '').filter(Boolean).join('');
+  return plainText || undefined;
+}
+
+function normalizeRetrievedDataSources(dataSources: NotionDatabaseResponse['data_sources']): DataSourceConfig[] {
+  return (dataSources ?? [])
+    .map((dataSource) => {
+      const id = dataSource.id?.trim() ?? '';
+      const name = dataSource.name?.trim() || id;
+      if (!id) {
+        return null;
+      }
+
+      return { id, name };
+    })
+    .filter((entry): entry is DataSourceConfig => Boolean(entry));
+}
+
 async function notionRequest<T>(path: string, { fetcher = fetch, token }: FetchOptions): Promise<{ ok: true; data: T } | { ok: false; status: number; error: string }> {
   const response = await fetcher(`${NOTION_API_BASE_URL}${path}`, {
     headers: {
@@ -117,6 +142,37 @@ async function notionRequest<T>(path: string, { fetcher = fetch, token }: FetchO
   }
 
   return { ok: true, data: data as T };
+}
+
+export async function resolveDatabaseDataSources({
+  fetcher = fetch,
+  token,
+  databaseId,
+}: ResolveDatabaseDataSourcesOptions): Promise<{ databaseId: string; resolvedName?: string; dataSources: DataSourceConfig[] }> {
+  const normalizedId = normalizeNotionId(databaseId);
+  if (!normalizedId) {
+    throw new Error('Database ID must be a valid 32-character Notion ID.');
+  }
+
+  const databaseLookup = await notionRequest<NotionDatabaseResponse>(`/databases/${normalizedId}`, {
+    fetcher,
+    token,
+  });
+
+  if (!databaseLookup.ok) {
+    throw new Error(databaseLookup.error);
+  }
+
+  const dataSources = normalizeRetrievedDataSources(databaseLookup.data.data_sources);
+  if (dataSources.length === 0) {
+    throw new Error('This Notion database does not expose any data sources to the integration.');
+  }
+
+  return {
+    databaseId: databaseLookup.data.id ?? normalizedId,
+    resolvedName: getDatabaseTitle(databaseLookup.data.title),
+    dataSources,
+  };
 }
 
 async function retrieveDataSource(sourceId: string, options: FetchOptions): Promise<{ dataSourceId: string; titlePropertyName: string; resolvedName?: string }> {
@@ -166,30 +222,17 @@ export async function resolveTargetDataSource({ fetcher = fetch, token, sourceId
     throw new Error(directLookup.error);
   }
 
-  const databaseLookup = await notionRequest<NotionDatabaseResponse>(`/databases/${normalizedId}`, {
+  const databaseTarget = await resolveDatabaseDataSources({
     fetcher,
     token,
+    databaseId: normalizedId,
   });
 
-  if (!databaseLookup.ok) {
-    throw new Error(databaseLookup.error);
+  if (databaseTarget.dataSources.length > 1) {
+    throw new Error('This database has multiple data sources. Save through a specific imported data source instead.');
   }
 
-  const dataSources = databaseLookup.data.data_sources ?? [];
-  if (dataSources.length === 0) {
-    throw new Error('This Notion database does not expose any data sources to the integration.');
-  }
-
-  if (dataSources.length > 1) {
-    throw new Error('This database has multiple data sources. Copy a specific data source ID from Notion settings.');
-  }
-
-  const dataSourceId = dataSources[0]?.id;
-  if (!dataSourceId) {
-    throw new Error('The Notion database response did not include a usable data source ID.');
-  }
-
-  return retrieveDataSource(dataSourceId, { fetcher, token });
+  return retrieveDataSource(databaseTarget.dataSources[0].id, { fetcher, token });
 }
 
 export async function createPageInNotion({ fetcher = fetch, token, sourceId, selectionText }: CreatePageOptions): Promise<SelectionSaveResult> {
