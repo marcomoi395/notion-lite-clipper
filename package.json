@@ -1,21 +1,24 @@
 {
-  "name": "wxt-starter",
-  "description": "manifest.json description",
+  "name": "notion-lite-clipper",
+  "description": "Quickly save short text selections into Notion databases",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "wxt",
-    "dev:firefox": "wxt -b firefox",
-    "build": "wxt build",
-    "build:firefox": "wxt build -b firefox",
-    "zip": "wxt zip",
-    "zip:firefox": "wxt zip -b firefox",
+    "dev": "bun node_modules/wxt/bin/wxt.mjs",
+    "dev:firefox": "bun node_modules/wxt/bin/wxt.mjs -b firefox",
+    "build": "bun node_modules/wxt/bin/wxt.mjs build",
+    "build:firefox": "bun node_modules/wxt/bin/wxt.mjs build -b firefox",
+    "zip": "bun node_modules/wxt/bin/wxt.mjs zip",
+    "zip:firefox": "bun node_modules/wxt/bin/wxt.mjs zip -b firefox",
     "compile": "tsc --noEmit",
-    "postinstall": "wxt prepare"
+    "test": "vitest run",
+    "postinstall": "bun node_modules/wxt/bin/wxt.mjs prepare"
   },
   "devDependencies": {
+    "jsdom": "^24.1.3",
     "typescript": "^5.9.3",
+    "vitest": "^3.2.4",
     "wxt": "^0.20.25"
   }
 }

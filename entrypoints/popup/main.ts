@@ -1,24 +1,57 @@
 import './style.css';
-import typescriptLogo from '@/assets/typescript.svg';
-import wxtLogo from '/wxt.svg';
-import { setupCounter } from '@/components/counter';
 
-document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
-  <div>
-    <a href="https://wxt.dev" target="_blank">
-      <img src="${wxtLogo}" class="logo" alt="WXT logo" />
-    </a>
-    <a href="https://www.typescriptlang.org/" target="_blank">
-      <img src="${typescriptLogo}" class="logo vanilla" alt="TypeScript logo" />
-    </a>
-    <h1>WXT + TypeScript</h1>
-    <div class="card">
-      <button id="counter" type="button"></button>
-    </div>
-    <p class="read-the-docs">
-      Click on the WXT and TypeScript logos to learn more
-    </p>
-  </div>
-`;
+import type { PublicConfig } from '../../lib/types';
 
-setupCounter(document.querySelector<HTMLButtonElement>('#counter')!);
+async function getPublicConfig(): Promise<PublicConfig> {
+  return browser.runtime.sendMessage({ type: 'get-public-config' }) as Promise<PublicConfig>;
+}
+
+function render(app: HTMLDivElement, config: PublicConfig): void {
+  const isReady = config.hasToken && config.dataSources.length > 0;
+
+  app.innerHTML = `
+    <main class="popup-shell">
+      <section class="card">
+        <p class="eyebrow">Notion Lite Clipper</p>
+        <h1>Right-click capture is ${isReady ? 'ready' : 'not ready'}</h1>
+        <p class="description">
+          Select up to 10 words on any page, then right-click and choose a Notion datasource from the extension submenu.
+        </p>
+        <dl class="status-list">
+          <div>
+            <dt>Token</dt>
+            <dd>${config.hasToken ? 'Configured' : 'Missing'}</dd>
+          </div>
+          <div>
+            <dt>Databases</dt>
+            <dd>${config.dataSources.length}</dd>
+          </div>
+        </dl>
+        <button id="open-options" type="button">Open settings</button>
+      </section>
+    </main>
+  `;
+
+  app.querySelector<HTMLButtonElement>('#open-options')?.addEventListener('click', async () => {
+    await browser.runtime.openOptionsPage();
+    window.close();
+  });
+}
+
+const app = document.querySelector<HTMLDivElement>('#app');
+
+if (app) {
+  void getPublicConfig()
+    .then((config) => render(app, config))
+    .catch(() => {
+      app.innerHTML = `
+        <main class="popup-shell">
+          <section class="card">
+            <p class="eyebrow">Notion Lite Clipper</p>
+            <h1>Settings unavailable</h1>
+            <p class="description">Open extension settings and try again.</p>
+          </section>
+        </main>
+      `;
+    });
+}
