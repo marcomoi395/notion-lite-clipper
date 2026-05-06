@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.1](https://github.com/marcomoi395/notion-lite-clipper/compare/v1.0.0...v1.0.1) (2026-05-06)
+
+
+### Bug Fixes
+
+* **icons:** release refreshed ([2c04c7f](https://github.com/marcomoi395/notion-lite-clipper/commit/2c04c7fa610e5ad56715ebb621e81b2ffcef5da6))
+
 ## 1.0.0 (2026-05-06)
 
 
