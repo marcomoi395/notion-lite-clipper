@@ -61,7 +61,7 @@ When `release-please` creates a new release, the workflow then:
 3. builds the Chrome and Firefox packages,
 4. uploads the generated zip files to the GitHub release.
 
-The only optional secret for the release workflow is `RELEASE_PLEASE_TOKEN`. If it is not configured, the workflow falls back to GitHub's default token. Releases still work, but follow-up workflows on release PRs created by release-please may not run. If you want CI to run on release PRs, add a PAT in `RELEASE_PLEASE_TOKEN` and enable **Allow GitHub Actions to create and approve pull requests** in the repository settings.
+`RELEASE_PLEASE_TOKEN` is required for the release workflow. Configure it as a fine-grained PAT that can write repository contents, pull requests, and issues. This repository cannot rely on GitHub's default `GITHUB_TOKEN` for release PR creation because GitHub Actions PR creation is disabled, which causes `release-please` to fail with `GitHub Actions is not permitted to create or approve pull requests`.
 
 Commit messages now drive release behavior:
 
