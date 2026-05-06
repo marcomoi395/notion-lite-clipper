@@ -2,7 +2,7 @@
   "name": "notion-lite-clipper",
   "description": "Quickly save short text selections into Notion databases",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "scripts": {
     "dev": "bun node_modules/wxt/bin/wxt.mjs",
