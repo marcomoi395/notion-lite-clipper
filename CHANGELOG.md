@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.2](https://github.com/marcomoi395/notion-lite-clipper/compare/v1.0.1...v1.0.2) (2026-06-05)
+
+
+### Bug Fixes
+
+* prevent duplicate context menu creation race condition ([092d5ef](https://github.com/marcomoi395/notion-lite-clipper/commit/092d5ef75abe709adaf01a07275b388657f519e3))
+
 ## [1.0.1](https://github.com/marcomoi395/notion-lite-clipper/compare/v1.0.0...v1.0.1) (2026-05-06)
 
 
