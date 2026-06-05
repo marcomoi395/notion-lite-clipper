@@ -73,6 +73,8 @@ async function openOptionsPage(): Promise<void> {
   await browser.runtime.openOptionsPage();
 }
 
+let isRefreshingMenus = false;
+
 async function applyContextMenus(config: ExtensionConfig): Promise<void> {
   await browser.contextMenus.removeAll();
 
@@ -82,8 +84,17 @@ async function applyContextMenus(config: ExtensionConfig): Promise<void> {
 }
 
 async function refreshContextMenus(): Promise<void> {
-  const config = await getStoredConfig();
-  await applyContextMenus(config);
+  if (isRefreshingMenus) {
+    return; // Skip if already refreshing
+  }
+
+  isRefreshingMenus = true;
+  try {
+    const config = await getStoredConfig();
+    await applyContextMenus(config);
+  } finally {
+    isRefreshingMenus = false;
+  }
 }
 
 async function handleSaveSelection(message: { sourceId?: string; selectionText?: string }): Promise<SelectionSaveResult> {
