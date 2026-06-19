@@ -83,16 +83,16 @@ To test the release workflow manually:
 3. Click **Run workflow**.
 4. Inspect the logs to confirm whether release-please created or updated a release PR, or created a release.
 
-## How to use
+## Example config files
 
-1. Open the extension options page.
-2. Paste your Notion internal integration token.
-3. Add a Notion database ID and save settings.
-4. Select text on any webpage.
-5. Right-click the selection and choose a Notion data source from the extension menu.
+You can start from these formats:
 
-## Notes
+- `.env`: `NOTION_TOKEN`, `DATABASE_1_ID`, `DATABASE_1_NAME`, `DATABASE_1_DATASOURCE_1_ID`, `DATABASE_1_DATASOURCE_1_NAME`
+- `.yml` / `.yaml`: nested `databases` and `dataSources`
 
-- The extension saves selected text as a new Notion page title.
-- If a database contains multiple data sources, they are imported into the context menu automatically.
-- The extension uses the Notion API directly from the background service worker.
+Example files are included in `examples/`:
+
+- `examples/notion-lite-clipper.env.example`
+- `examples/notion-lite-clipper.yml.example`
+
+Import them from the Options page, then edit and save.

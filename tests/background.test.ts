@@ -7,7 +7,7 @@ let ROOT_MENU_ID: typeof import('../entrypoints/background').ROOT_MENU_ID;
 let SETTINGS_MENU_ID: typeof import('../entrypoints/background').SETTINGS_MENU_ID;
 
 beforeEach(async () => {
-  vi.resetModules();
+  vi.resetModules?.();
   Object.defineProperty(globalThis, 'defineBackground', {
     configurable: true,
     value: (factory: unknown) => factory,

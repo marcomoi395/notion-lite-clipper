@@ -20,7 +20,7 @@ function normalizeDatabase(input: Partial<NotionDatabaseConfig> | null | undefin
     .map((entry) => normalizeDataSource(entry))
     .filter((entry): entry is DataSourceConfig => Boolean(entry));
 
-  if (!id || dataSources.length === 0) {
+  if (!id) {
     return null;
   }
 

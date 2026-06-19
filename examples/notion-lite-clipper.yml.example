@@ -1,0 +1,10 @@
+# Copy this file to notion-lite-clipper.yml and fill in your real values.
+notionToken: secret_...
+databases:
+  - id: d9824bdc84454327be8b5b47500af6ce
+    name: Inbox
+    dataSources:
+      - id: aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee
+        name: Inbox
+      - id: ffffffff-1111-2222-3333-444444444444
+        name: Quotes

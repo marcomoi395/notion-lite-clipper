@@ -1,8 +1,10 @@
 import './style.css';
 
+import { exportConfigAsEnv, exportConfigAsYaml } from '../../lib/config-export';
+import { parseExtensionConfigFile } from '../../lib/config-import';
 import { normalizeNotionId } from '../../lib/notion';
 import { getStoredConfig, sanitizeConfig, saveStoredConfig } from '../../lib/storage';
-import type { DataSourceConfig, ValidationResult } from '../../lib/types';
+import type { DataSourceConfig, ExtensionConfig, ValidationResult } from '../../lib/types';
 
 interface DatabaseRow {
   key: number;
@@ -20,14 +22,30 @@ interface OptionsState {
   saveState: 'idle' | 'success' | 'error';
 }
 
+interface ImportState {
+  fileName: string;
+  status: string;
+}
+
+function downloadTextFile(fileName: string, content: string): void {
+  const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = fileName;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
 let nextRowKey = 1;
 const validationTimers = new Map<number, number>();
 
-const state: OptionsState = {
+const state: OptionsState & { importState: ImportState } = {
   notionToken: '',
   databases: [createEmptyRow()],
   saveMessage: '',
   saveState: 'idle',
+  importState: { fileName: '', status: '' },
 };
 
 function createEmptyRow(): DatabaseRow {
@@ -61,6 +79,19 @@ function escapeHtml(input: string): string {
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;');
+}
+
+function mapConfigToRows(config: ExtensionConfig): DatabaseRow[] {
+  return config.databases.length > 0
+    ? config.databases.map((row) => ({
+        key: nextRowKey++,
+        id: row.id,
+        resolvedName: row.name,
+        resolvedDataSources: row.dataSources,
+        validationState: 'valid',
+        validationMessage: `Imported ${row.dataSources.length} data source${row.dataSources.length === 1 ? '' : 's'} from ${row.name}.`,
+      }))
+    : [createEmptyRow()];
 }
 
 function setSaveStatus(message: string, saveState: OptionsState['saveState']): void {
@@ -184,6 +215,18 @@ function buildRowsMarkup(): string {
     .join('');
 }
 
+function getCurrentConfig(): ExtensionConfig {
+  return sanitizeConfig({
+    notionToken: state.notionToken,
+    databases: state.databases
+      .filter((row) => row.id.trim())
+      .map((row) => ({
+        id: row.id,
+        name: row.resolvedName || row.id.trim(),
+        dataSources: row.resolvedDataSources,
+      })),
+  });
+}
 function attachEventHandlers(app: HTMLDivElement): void {
   app.querySelector<HTMLInputElement>('#notion-token')?.addEventListener('input', (event) => {
     const target = event.currentTarget as HTMLInputElement;
@@ -196,6 +239,29 @@ function attachEventHandlers(app: HTMLDivElement): void {
         scheduleRowValidation(row.key);
       }
     }
+  });
+
+  app.querySelector<HTMLInputElement>('#config-file')?.addEventListener('change', async (event) => {
+    const target = event.currentTarget as HTMLInputElement;
+    const file = target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    const imported = sanitizeConfig(parseExtensionConfigFile(await file.text(), file.name));
+    state.notionToken = imported.notionToken;
+    state.databases = mapConfigToRows(imported);
+    state.importState = { fileName: file.name, status: `Imported ${file.name}.` };
+    setSaveStatus('Imported file loaded. Save settings to persist it.', 'success');
+    render();
+  });
+
+  app.querySelector<HTMLButtonElement>('#export-env')?.addEventListener('click', () => {
+    downloadTextFile('notion-lite-clipper.env', exportConfigAsEnv(getCurrentConfig()));
+  });
+
+  app.querySelector<HTMLButtonElement>('#export-yaml')?.addEventListener('click', () => {
+    downloadTextFile('notion-lite-clipper.yml', exportConfigAsYaml(getCurrentConfig()));
   });
 
   app.querySelector<HTMLButtonElement>('#add-row')?.addEventListener('click', () => {
@@ -252,9 +318,27 @@ function render(): void {
           <p class="eyebrow">Notion Lite Clipper</p>
           <h1>Configure Notion capture</h1>
           <p class="description">
-            Paste each Notion database ID once. The extension will retrieve every data source under that database automatically.
+            Import settings from a file or export a ready-to-edit config template.
           </p>
         </div>
+      </section>
+
+      <section class="card">
+        <div class="section-heading">
+          <div>
+            <h2>Import / export config</h2>
+            <p>Use .env or YAML if you want a file-based setup. Export writes your current settings into the same formats.</p>
+          </div>
+          <div class="inline-actions">
+            <button id="export-env" type="button">Export .env</button>
+            <button id="export-yaml" type="button">Export .yml</button>
+          </div>
+        </div>
+        <label class="field-group" for="config-file">
+          <span>Import config file</span>
+          <input id="config-file" type="file" accept=".env,.yml,.yaml,.json,text/plain,application/json" />
+        </label>
+        <p class="save-status">${escapeHtml(state.importState.status)}</p>
       </section>
 
       <section class="card">
@@ -362,19 +446,8 @@ async function loadInitialState(): Promise<void> {
   const config = await getStoredConfig();
 
   state.notionToken = config.notionToken;
-  state.databases =
-    config.databases.length > 0
-      ? config.databases.map((row) => ({
-          key: nextRowKey++,
-          id: row.id,
-          resolvedName: row.name,
-          resolvedDataSources: row.dataSources,
-          validationState: 'valid',
-          validationMessage: `Imported ${row.dataSources.length} data source${row.dataSources.length === 1 ? '' : 's'} from ${row.name}.`,
-        }))
-      : [createEmptyRow()];
+  state.databases = mapConfigToRows(config);
 
   render();
 }
-
 void loadInitialState();
