@@ -40,16 +40,17 @@ export class SelectionOverlay {
       :host { all: initial; }
       .panel {
         width: fit-content;
-        max-width: min(320px, calc(100vw - 24px));
+        max-width: min(360px, calc(100vw - 24px));
         display: flex;
         flex-direction: column;
-        gap: 8px;
-        padding: 8px;
-        border-radius: 999px;
-        background: rgba(17, 24, 39, 0.98);
-        color: #f9fafb;
-        box-shadow: 0 12px 30px rgba(15, 23, 42, 0.3);
-        border: 1px solid rgba(255, 255, 255, 0.08);
+        gap: 10px;
+        padding: 10px;
+        border-radius: 18px;
+        background: rgba(245, 245, 247, 0.86);
+        color: #1d1d1f;
+        box-shadow: 0 18px 50px rgba(0, 0, 0, 0.16);
+        border: 1px solid rgba(0, 0, 0, 0.08);
+        backdrop-filter: blur(20px) saturate(180%);
         transform: translateY(4px);
         opacity: 0;
         transition: opacity 120ms ease, transform 120ms ease;
@@ -59,7 +60,7 @@ export class SelectionOverlay {
         opacity: 1;
       }
       .panel.is-expanded {
-        border-radius: 16px;
+        border-radius: 18px;
       }
       .actions {
         display: flex;
@@ -71,42 +72,46 @@ export class SelectionOverlay {
         border: 0;
         border-radius: 999px;
         min-height: 36px;
-        padding: 8px 12px;
+        padding: 8px 14px;
         font-size: 12px;
         line-height: 1.2;
-        color: #0f172a;
-        background: #f8fafc;
+        color: #ffffff;
+        background: #0066cc;
         cursor: pointer;
-        transition: transform 120ms ease, opacity 120ms ease, background 120ms ease;
+        transition: transform 120ms ease, opacity 120ms ease, background-color 120ms ease;
       }
-      button:hover { transform: translateY(-1px); }
-      button:disabled { opacity: 0.6; cursor: wait; transform: none; }
+      button:hover { background: #0071e3; }
+      button:active { transform: scale(0.98); }
+      button:disabled { opacity: 0.55; cursor: wait; transform: none; }
       button[data-state='success'] {
-        background: #86efac;
+        background: #1d9a6c;
       }
       button[data-state='saving'] {
-        background: #bfdbfe;
+        background: #0071e3;
       }
       .trigger {
         min-width: 36px;
         padding: 8px;
         font-size: 13px;
-        font-weight: 700;
+        font-weight: 600;
       }
       .status {
         min-height: 16px;
         padding: 0 4px;
         font-size: 12px;
-        color: #fca5a5;
+        color: #6e6e73;
       }
       .status:empty {
         display: none;
       }
+      .status[data-state='error'] {
+        color: #d70015;
+      }
       .status[data-state='success'] {
-        color: #86efac;
+        color: #1d9a6c;
       }
       .status[data-state='info'] {
-        color: #cbd5e1;
+        color: #6e6e73;
       }
     `;
 
@@ -249,7 +254,7 @@ export class SelectionOverlay {
   }
 
   private position(rect: SelectionRect): void {
-    const panelWidth = this.expanded ? 220 : 52;
+    const panelWidth = this.expanded ? 240 : 54;
     const topPadding = 12;
     const belowTop = rect.bottom + 10;
     const aboveTop = rect.top - 56;
