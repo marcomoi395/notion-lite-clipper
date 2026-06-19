@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.0](https://github.com/marcomoi395/notion-lite-clipper/compare/v1.0.2...v1.1.0) (2026-06-19)
+
+
+### Features
+
+* **options-config:** added config file import and export ([236007f](https://github.com/marcomoi395/notion-lite-clipper/commit/236007f600797e35ee62d932ef8653aad08359ce))
+* **ui:** introduced Apple-inspired UI refresh ([5b28244](https://github.com/marcomoi395/notion-lite-clipper/commit/5b28244df2c50ddb0d38d3a19bc3793266c78d03))
+
 ## [1.0.2](https://github.com/marcomoi395/notion-lite-clipper/compare/v1.0.1...v1.0.2) (2026-06-05)
 
 
